@@ -1,0 +1,289 @@
+
+; quasiquote isn't defined natively, so we have to provide an implementation here
+; (this implementation has been carefully written to not require anything other than
+;  the functions provided by the core)
+(let quasiquote (closure (a e)
+   (let do-quasiquote (lambda (v)
+      (cond
+         (eq (type v) 'cons)
+            (cond
+               (eq (car v) 'unquote) (eval (car (cdr v)) e)
+               (cons (do-quasiquote (car v)) (do-quasiquote (cdr v))))
+            v)))
+	(do-quasiquote (car a))))
+
+; first defun, just wraps (lambda)
+(let defun (macro (name plist expr)
+  `(let ,name (lambda ,plist ,expr))))
+
+(let nop (closure (a e) '()))
+
+(let nil '())
+
+(defun cadr (l)
+   (car (cdr l)))
+
+(defun cddr (l)
+   (cdr (cdr l)))
+
+(defun caar (l)
+   (car (car l)))
+
+(defun caddr (l)
+   (car (cdr (cdr l))))
+
+(defun cadar (l)
+   (car (cdr (car l))))
+
+(defun cadddr (l)
+   (car (cdr (cdr (cdr l)))))
+
+(defun cadadr (l)
+   (car (cdr (car (cdr l)))))
+
+; and is written as a raw closure rather than a function, because that way it can have short-circuit evaluation
+(let and (closure (args env)
+   (let do-and (lambda (ls)
+      (cond
+         (eq ls '()) 't
+         (eq (eval (car ls) env) '()) '()
+         (do-and (cdr ls)))))
+   (do-and args)))
+
+(let or (closure (args env)
+   (let do-or (lambda (ls)
+      (cond
+         (eq ls '()) '()
+         (eval (car ls) env) 't
+         (do-or (cdr ls)))))
+   (do-or args)))
+
+(defun not (x)
+   (cond x '() 't))
+
+(defun null? (x)
+   (eq x '()))
+
+(defun pair? (v)
+   (eq (type v) 'cons))
+
+(defun symbol? (v)
+   (eq (type v) 'symbol))
+
+(defun mapcar (f ls)
+   (cond
+      (null? ls) '()
+      (cons (f (car ls)) (mapcar f (cdr ls)))))
+
+(defun map-eval (vals env)
+   (mapcar (lambda (x) (eval x env)) vals))
+
+(let init-param-list (lambda (plist args env)
+   (let first-name (car plist))
+   (cond
+      (eq first-name '&rest) (env-let (cadr plist) args env)
+      (null? first-name) '()
+      (do
+         (env-let first-name (car args) env)
+         (init-param-list (cdr plist) (cdr args) env)))))
+
+; second defun, uses init-param-list, so you can define variadic functions
+(let defun (macro (name plist expr)
+   (let args-sym (gensym))
+   (let env-sym (gensym))
+   `(let ,name (closure (,args-sym ,env-sym)
+      (init-param-list ',plist (map-eval ,args-sym ,env-sym) (get-env))
+      ,expr))))
+
+; first defmacro, uses init-param-list, so you can define variadic macros
+(let defmacro (macro (name plist code)
+   (let args-sym (gensym))
+   (let env-sym (gensym))
+   `(let ,name (closure (,args-sym ,env-sym)
+      (eval
+         (do
+            (init-param-list ',plist ,args-sym (get-env))
+            ,code)
+         ,env-sym)))))
+
+; second defmacro uses &rest, so you can write macros with multiple statements
+(defmacro defmacro (name plist &rest code) (do
+   (let args-sym (gensym))
+   (let env-sym (gensym))
+   `(let ,name (closure (,args-sym ,env-sym)
+      (eval
+         (do
+            (init-param-list ',plist ,args-sym (get-env))
+            . ,code)
+         ,env-sym)))))
+
+; third defun, uses &rest, so you can write functions with multiple statements
+(defmacro defun (name plist &rest code)
+   (let args-sym (gensym))
+   (let env-sym (gensym))
+   `(let ,name (closure (,args-sym ,env-sym)
+      (init-param-list ',plist (map-eval ,args-sym ,env-sym) (get-env))
+      . ,code)))
+
+(let list-member? (lambda (lst val testfn)
+   (cond
+      (null? lst) '()
+      (testfn (car lst) val) 't
+      (list-member? (cdr lst) val testfn))))
+
+; fourth defun, uses conditional expansion to create a function object if the param list doesn't contain &rest
+(defmacro defun (name plist &rest code)
+   (cond
+      (list-member? plist '&rest eq)
+         (do
+            (let args-sym (gensym))
+            (let env-sym (gensym))
+            `(let ,name (closure (,args-sym ,env-sym)
+               (init-param-list ',plist (map-eval ,args-sym ,env-sym) (get-env))
+               . ,code)))
+      `(let ,name (lambda ,plist . ,code))))
+
+; third defmacro uses conditional expansion to create a simpler macro object instead of a raw closure
+; if the param list doesn't contain &rest
+(defmacro defmacro (name plist &rest code)
+   (cond
+      (list-member? plist '&rest eq)
+         (do
+            (let args-sym (gensym))
+            (let env-sym (gensym))
+            `(let ,name (closure (,args-sym ,env-sym)
+               (eval
+                  (do
+                     (init-param-list ',plist ,args-sym (get-env))
+                     . ,code)
+                  ,env-sym))))
+      `(let ,name (macro ,plist . ,code))))
+
+(defun append (seq-1 seq-2)
+   (cond
+      (null? seq-2) seq-1
+      (null? seq-1) seq-2
+      (cons (car seq-1) (append (cdr seq-1) seq-2))))
+
+(defun concat (&rest lists)
+   (defun do-concat (ls)
+      (cond
+         (null? ls) '()
+         (append (car ls) (do-concat (cdr ls)))))
+   (do-concat lists))
+
+(defun collect (tst lst)
+   (cond
+      (null? lst) '()
+      (cond
+         (tst (car lst)) (cons (car lst) (collect tst (cdr lst)))
+         (collect tst (cdr lst)))))
+
+; (defun for-each (f lst)
+   ; (cond
+      ; (null? lst) '()
+      ; (do
+         ; (f (car lst))
+         ; (for-each f (cdr lst)))))
+
+; written as a closure not a normal macro, because I have to use recursion to loop
+; through the list, and that means creating a new function - but I don't want to
+; enter a new scope, so I need access to the calling environment directly,
+; to use env-let and env-set, and evaluate the body in the correct environment
+; nb: may be better to go for the simpler map-style for-each...
+; not sure which I'll prefer in practice
+(let for-each (closure (args env)
+   (let body (cddr args))
+   (let val-sym (car args))
+
+   (env-let val-sym '() env)
+   (defun do-for-each (lst)
+      (cond
+         (null? lst) '()
+         (do
+            (env-set val-sym (car lst) env)
+            (eval `(do . ,body) env)
+            (do-for-each (cdr lst)))))
+
+   (do-for-each (eval (cadr args) env))))
+
+(let while (closure (args env)
+   (let test (car args))
+   (let body (cdr args))
+
+   (defun do-while ()
+      (cond
+         (eval test env)
+            (do
+               (eval `(do . ,body) env)
+               (do-while))))
+
+   (do-while)))
+
+(let until (closure (args env)
+   (let test (car args))
+   (let body (cdr args))
+
+   (defun do-until ()
+      (cond
+         (eval test env) '()
+         (do
+            (eval `(do . ,body) env)
+            (do-until))))
+
+   (do-until)))
+
+; now that we have append and concat, we can bootstrap quasiquote up to the next level,
+; to support unquote-splicing
+; (let quasiquote (closure (a e)
+   ; (defun do-quasiquote (expr)
+      ; (cond
+         ; ))
+   ; (do-quasiquote a)))
+
+; simple quicksort implementation
+; (very slow, despite being called quicksort)
+(defun sort (lst)
+   (defun split (lst mid)
+      (let lower-lst '())
+      (let higher-lst '())
+      (for-each x lst
+         (cond
+            (< x mid) (set lower-lst (cons x lower-lst))
+            (set higher-lst (cons x higher-lst))))
+      (cons lower-lst higher-lst))
+   ; using a sort-append function means that it doesn't have to use the concat routine,
+   ; and therefore doesn't have to loop through the whole lower half of the split list
+   ; when it's producing the result (so there's a lot less to execute, and a lot less to cons)
+   (defun sort-append (lst postfix)
+      (cond
+         (null? lst) postfix
+         (null? (cdr lst)) (cons (car lst) postfix)
+         (do
+            (let it (car lst))
+            (let rest (split (cdr lst) it))
+
+            (let upper (sort-append (cdr rest) postfix))
+            (sort-append (car rest) (cons it upper)))))
+   (sort-append lst '()))
+
+(scope
+   (print 'sorting...)
+   (let in-list '("roger" "brian" "mike" "chris" "luke" "kayure" "lisa" "sarah" "nick" "matt" "jenny" "zoe" "matt"))
+   (print in-list)
+   (print (sort in-list))
+)
+
+(defmacro case (it &rest cases)
+   (defun do-case (sym ls)
+      (cond
+         (null? ls) '()
+         (null? (cdr ls)) (list (car ls))
+         (cons
+            `(eq ,sym ,(car ls))
+            (cons (cadr ls) (do-case sym (cddr ls))))))
+   (let __it (gensym))
+   `(do
+      (let ,__it ,it)
+      (cond . ,(do-case __it cases))))
+

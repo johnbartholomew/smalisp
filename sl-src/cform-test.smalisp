@@ -1,0 +1,70 @@
+;; quasiquote isn't defined natively, so we have to provide an implementation here
+;; (this implementation has been carefully written to not require anything other than
+;;  the functions provided by the core)
+(let quasiquote (closure (a e)
+   (let do-quasiquote (lambda (v)
+      (cond
+         (eq (type v) 'cons)
+            (cond
+               (eq (car v) 'unquote) (eval (car (cdr v)) e)
+               (cons (do-quasiquote (car v)) (do-quasiquote (cdr v))))
+            v)))
+	(do-quasiquote (car a))))
+
+(let range (lambda (n)
+   (let f (lambda (x accum)
+      (cond
+         (eq x 0) (cons 0 accum)
+         (f (- x 1) (cons x accum)))))
+   (f (- n 1) (cons n))))
+
+(let cform (assemble-form
+   '((zero 0))
+   '(loop)
+   '( (CAR (reg exp) (reg argl))
+      (CONS1 (reg val) (reg exp))
+   loop
+      (DEC (reg exp))
+      (CONS (reg val) (reg exp) (reg val))
+      (EQ (reg exp) (rk zero))
+      (BRANCHNOT (label loop))
+      (RETURN))))
+
+(profile 'not-compiled
+   (range 100))
+
+(profile 'compiled
+   (cform 100))
+
+(profile 'not-compiled-qq
+   `(hello (world ,+ ,- ,(+ 5 8)) ,quote (foo bar) (,+ 5 8)))
+
+(let quasiquote (assemble-form
+   '((unquote unquote))
+   '(do-qq rec exit)
+   '( (CAR (reg val) (reg argl))
+   do-qq
+      (ISCONS (reg val))
+      (BRANCHNOT (label exit))
+      (CAR (reg exp) (reg val))
+      (EQ (reg exp) (rk unquote))
+      (BRANCHNOT (label rec))
+      (CDR (reg exp) (reg val))
+      (CAR (reg exp) (reg exp))
+      (TAILEVAL)
+   rec
+      (PUSH (reg val))
+      (CDR (reg val) (reg val))
+      (RECJMP (label do-qq))
+      (MOVE (reg argl) (reg val))
+      (POP (reg val))
+      (PUSH (reg argl))
+      (CAR (reg val) (reg val))
+      (RECJMP (label do-qq))
+      (POP (reg argl))
+      (CONS (reg val) (reg val) (reg argl))
+   exit
+      (RETURN))))
+
+(profile 'compiled-qq
+  `(hello (world ,+ ,- ,(+ 5 8)) ,quote (foo bar) (,+ 5 8)))

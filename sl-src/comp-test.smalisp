@@ -1,0 +1,441 @@
+
+;; quasiquote isn't defined natively, so we have to provide an implementation here
+;; (this implementation is written directly in bytecode for speed of execution,
+;;  since it gets used quite a lot)
+(let quasiquote (assemble-form
+   '((unquote unquote))
+   '(do-qq rec exit)
+   '( (CAR (reg val) (reg argl))
+   do-qq
+      (ISCONS (reg val))
+      (BRANCHNOT (label exit))
+      (CAR (reg exp) (reg val))
+      (EQ (reg exp) (rk unquote))
+      (BRANCHNOT (label rec))
+      (CDR (reg exp) (reg val))
+      (CAR (reg exp) (reg exp))
+      (TAILEVAL)
+   rec
+      (PUSH (reg val))
+      (CDR (reg val) (reg val))
+      (RECJMP (label do-qq))
+      (MOVE (reg argl) (reg val))
+      (POP (reg val))
+      (PUSH (reg argl))
+      (CAR (reg val) (reg val))
+      (RECJMP (label do-qq))
+      (POP (reg argl))
+      (CONS (reg val) (reg val) (reg argl))
+   exit
+      (RETURN))))
+
+(let define (closure (a e)
+   (let val (eval (car (cdr a)) e))
+   (env-let (car a) val e)
+   (env-set-const (car a) 't e)
+   val))
+(env-set-const 'define 't)
+
+(define redefine (closure (a e)
+   (let val (eval (car (cdr a)) e))
+   (cond (env-is-const (car a) e)
+     (env-set-const (car a) '() e))
+   (env-let (car a) val e)
+   (env-set-const (car a) 't e)
+   val))
+
+;; some synonyms (may or may not use - we'll see)
+(define = set)
+(define <- let)
+
+(define === eq) ;; eq as in "identical"
+(define eq? eq)
+(define == eql) ;; eql as in "equal"
+(define eqv? eql)
+
+(define nil '())
+(define #t 't)
+(define t 't)
+;; yes, yes, I know - in r5rs, '() is actually a true value,
+;; and #f is not nil, but this isn't scheme, so never mind that
+;; (making nil a 'true' value is somewhat brain-dead in my opinion,
+;; although there are arguments for it)
+(define #f '())
+
+;; first defun, just wraps (lambda)
+(define defun (macro (name plist expr)
+  `(define ,name (lambda ,plist ,expr))))
+
+;; you never know, having a nop might be useful
+;; (could be used to comment out forms, for example... sort of... turn anything into nil, anyway
+(define nop (closure (a e) '()))
+
+(defun cadr (l)
+   (car (cdr l)))
+
+(defun cddr (l)
+   (cdr (cdr l)))
+
+(defun caar (l)
+   (car (car l)))
+
+(defun caddr (l)
+   (car (cdr (cdr l))))
+
+(defun cadar (l)
+   (car (cdr (car l))))
+
+(defun cdddr (l)
+   (cdr (cdr (cdr l))))
+
+(defun cadddr (l)
+   (car (cdr (cdr (cdr l)))))
+
+(defun cadadr (l)
+   (car (cdr (car (cdr l)))))
+
+(defun null? (x)
+   (eq x '()))
+
+(defun pair? (v)
+   (eq (type v) 'cons))
+
+(defun symbol? (v)
+   (eq (type v) 'symbol))
+
+; and is written as a raw closure rather than a function, because that way it can have short-circuit evaluation
+(define and (closure (args env)
+   (let do-and (lambda (ls)
+      (cond
+         (null? ls) 't
+         (null? (eval (car ls) env)) '()
+         (do-and (cdr ls)))))
+   (do-and args)))
+
+(define or (closure (args env)
+   (let do-or (lambda (ls)
+      (cond
+         (null? ls) '()
+         (eval (car ls) env) 't
+         (do-or (cdr ls)))))
+   (do-or args)))
+
+(defun not (x)
+   (cond x '() 't))
+
+(defun mapcar (f ls)
+   (cond
+      (null? ls) '()
+      (cons (f (car ls)) (mapcar f (cdr ls)))))
+
+(defun map-eval (vals env)
+   (mapcar (lambda (x) (eval x env)) vals))
+
+(define init-param-list (lambda (plist args env)
+   (let first-name (car plist))
+   (cond
+      (eq? first-name '&rest) (env-let (cadr plist) args env)
+      (null? first-name) '()
+      (do
+         (env-let first-name (car args) env)
+         (init-param-list (cdr plist) (cdr args) env)))))
+
+; second defun, uses init-param-list, so you can define variadic functions
+(define defun (macro (name plist expr)
+   (let args-sym (gensym))
+   (let env-sym (gensym))
+   `(define ,name (closure (,args-sym ,env-sym)
+      (init-param-list ',plist (map-eval ,args-sym ,env-sym) (get-env))
+      ,expr))))
+
+; first defmacro, uses init-param-list, so you can define variadic macros
+(define defmacro (macro (name plist code)
+   (let args-sym (gensym))
+   (let env-sym (gensym))
+   `(define ,name (closure (,args-sym ,env-sym)
+      (eval
+         (do
+            (init-param-list ',plist ,args-sym (get-env))
+            ,code)
+         ,env-sym)))))
+
+; second defmacro uses &rest, so you can write macros with multiple statements
+(defmacro defmacro (name plist &rest code) (do
+   (let args-sym (gensym))
+   (let env-sym (gensym))
+   `(define ,name (closure (,args-sym ,env-sym)
+      (eval
+         (do
+            (init-param-list ',plist ,args-sym (get-env))
+            . ,code)
+         ,env-sym)))))
+
+; third defun, uses &rest, so you can write functions with multiple statements
+(defmacro defun (name plist &rest code)
+   (let args-sym (gensym))
+   (let env-sym (gensym))
+   `(define ,name (closure (,args-sym ,env-sym)
+      (init-param-list ',plist (map-eval ,args-sym ,env-sym) (get-env))
+      . ,code)))
+
+(define list-member? (lambda (lst val testfn)
+   (cond
+      (null? lst) '()
+      (testfn (car lst) val) 't
+      (list-member? (cdr lst) val testfn))))
+
+; fourth defun, uses conditional expansion to create a function object if the param list doesn't contain &rest
+(defmacro defun (name plist &rest code)
+   (cond
+      (list-member? plist '&rest eq?)
+         (do
+            (let args-sym (gensym))
+            (let env-sym (gensym))
+            `(define ,name (closure (,args-sym ,env-sym)
+               (init-param-list ',plist (map-eval ,args-sym ,env-sym) (get-env))
+               . ,code)))
+      `(define ,name (lambda ,plist . ,code))))
+
+; third defmacro uses conditional expansion to create a simpler macro object instead of a raw closure
+; if the param list doesn't contain &rest
+(defmacro defmacro (name plist &rest code)
+   (cond
+      (list-member? plist '&rest eq?)
+         (do
+            (let args-sym (gensym))
+            (let env-sym (gensym))
+            `(define ,name (closure (,args-sym ,env-sym)
+               (eval
+                  (do
+                     (init-param-list ',plist ,args-sym (get-env))
+                     . ,code)
+                  ,env-sym))))
+      `(define ,name (macro ,plist . ,code))))
+
+(defun append (seq-1 seq-2)
+   (cond
+      (null? seq-2) seq-1
+      (null? seq-1) seq-2
+      (cons (car seq-1) (append (cdr seq-1) seq-2))))
+
+(defun concat (&rest lists)
+   (defun do-concat (ls)
+      (cond
+         (null? ls) '()
+         (append (car ls) (do-concat (cdr ls)))))
+   (do-concat lists))
+
+(defun collect (tst lst)
+   (cond
+      (null? lst) '()
+      (cond
+         (tst (car lst)) (cons (car lst) (collect tst (cdr lst)))
+         (collect tst (cdr lst)))))
+
+; (defun for-each (f lst)
+   ; (cond
+      ; (null? lst) '()
+      ; (do
+         ; (f (car lst))
+         ; (for-each f (cdr lst)))))
+
+;; could just do this as a macro producing a (cond) form - *shrug*
+(define if (closure (args env)
+   (cond
+      (eval (car args) env)
+         (eval (cadr args) env)
+      (eval (caddr args) env))))
+
+; written as a closure not a normal macro, because I have to use recursion to loop
+; through the list, and that means creating a new function - but I don't want to
+; enter a new scope, so I need access to the calling environment directly,
+; to use env-let and env-set, and evaluate the body in the correct environment
+; nb: may be better to go for the simpler map-style for-each...
+; not sure which I'll prefer in practice
+(define for-each (closure (args env)
+   (let body (cddr args))
+   (let val-sym (car args))
+
+   (env-let val-sym '() env)
+   (defun do-for-each (lst)
+      (cond
+         (null? lst) '()
+         (do
+            (env-set val-sym (car lst) env)
+            (eval `(do . ,body) env)
+            (do-for-each (cdr lst)))))
+
+   (do-for-each (eval (cadr args) env))))
+
+(define while (closure (args env)
+   (let test (car args))
+   (let body (cdr args))
+
+   (defun do-while ()
+      (cond
+         (eval test env)
+            (do
+               (eval `(do . ,body) env)
+               (do-while))))
+
+   (do-while)))
+
+(define until (closure (args env)
+   (let test (car args))
+   (let body (cdr args))
+
+   (defun do-until ()
+      (cond
+         (eval test env) '()
+         (do
+            (eval `(do . ,body) env)
+            (do-until))))
+
+   (do-until)))
+
+; simple quicksort implementation
+; (very slow, despite being called quicksort)
+(defun quicksort (lst)
+   (defun split (lst mid)
+      (let lower-lst '())
+      (let higher-lst '())
+      (for-each x lst
+         (cond
+            (< x mid) (= lower-lst (cons x lower-lst))
+            (= higher-lst (cons x higher-lst))))
+      (cons lower-lst higher-lst))
+   ; using a sort-append function means that it doesn't have to use the concat routine,
+   ; and therefore doesn't have to loop through the whole lower half of the split list
+   ; when it's producing the result (so there's a lot less to execute, and a lot less to cons)
+   (defun sort-append (lst postfix)
+      (cond
+         (null? lst) postfix
+         (null? (cdr lst)) (cons (car lst) postfix)
+         (do
+            (let it (car lst))
+            (let rest (split (cdr lst) it))
+
+            (let upper (sort-append (cdr rest) postfix))
+            (sort-append (car rest) (cons it upper)))))
+   (sort-append lst '()))
+
+(define sort quicksort) ;; easy to change in case i decide to try merge-sort or something
+
+(defmacro case (it &rest cases)
+   (defun do-case (sym ls)
+      (cond
+         (null? ls) '()
+         (null? (cdr ls)) (list (car ls))
+         (cons
+            `(eq? ,sym ,(car ls))
+            (cons (cadr ls) (do-case sym (cddr ls))))))
+   (let __it (gensym))
+   `(do
+      (let ,__it ,it)
+      (cond . ,(do-case __it cases))))
+
+;; a 'set' is just a sorted list with no duplicates
+(defun list->set (ls)
+   (= ls (sort ls))
+   ;; this is inefficient; it will construct a completely new list even if there are no duplicates
+   (defun remove-duplicates (ls)
+      (cond
+         (null? ls) '()
+         (null? (cdr ls)) ls
+         ;; using eqv? just incase i ever want to make a set of strings and not a set of symbols
+         ;; eqv? is synonymous with eq for symbols anyway, so it shouldn't slow anything down
+         (eqv? (car ls) (cadr ls)) (remove-duplicates (cdr ls))
+         (cons (car ls) (remove-duplicates (cdr ls)))))
+   (remove-duplicates ls))
+
+(defun set-member? (set val)
+   (cond
+      (null? set) '()
+      (eqv? (car set) val) 't
+      (> (car set) val) '()
+      (set-member? (cdr set) val)))
+
+(defun set-union (set-a set-b)
+   (let result '())
+   (for-each a set-a
+      (while (and set-b (< (car set-b) a))
+         (= result (cons (car set-b) result))
+         (= set-b (cdr set-b)))
+      ;; skip a value in set-b if it's also in set-a
+      (if (eqv? (car set-b) a) (= set-b (cdr set-b)))
+      ;; add the value from a
+      (= result (cons a result)))
+   ;; now we have to add whatever's left of set-b onto the end
+   (for-each b set-b
+      (= result (cons b result)))
+   (sort result))
+
+(defun set-intersection (set-a set-b)
+   (let result '())
+   (for-each a set-a
+      (while (and set-b (< (car set-b) a))
+         (= set-b (cdr set-b)))
+      (if (eqv? (car set-b) a)
+         (do
+            (= result (cons a result))
+            (= set-b (cdr set-b)))))
+   (sort result))
+
+(defun set-difference (set-a set-b)
+   (let result '())
+   (for-each a set-a
+      (while (and set-b (< (car set-b) a))
+         (= set-b (cdr set-b)))
+      (if (eqv? (car set-b) a)
+         (= set-b (cdr set-b))
+         (= result (cons a result))))
+   (sort result))
+
+;; structure library... uses environments internally
+
+(define defstruct '())
+(define get-type '())
+
+(scope
+   (define type-slot (gensym))
+
+   (= defstruct (closure (a env)
+      (let name (car a))
+      (let fields (cdr a))
+      (let s (list (cons type-slot (list name))))
+      (for-each fld fields
+         (cond
+            (symbol? fld) (= s (cons (cons fld '()) s))
+            (pair? fld) (= s (cons (cons (car fld) (eval (cadr fld) env)) s))))
+      (env-let name s env)
+      s))
+
+   (= get-type (lambda (s)
+      (eval type-slot s))))
+
+(defun make-struct (struct-type)
+   (let s (make-env))
+   (for-each field struct-type
+      (env-let (car field) (cdr field) s))
+   s)
+
+(defmacro slot-get (struct slot)
+   `(eval ',slot ,struct))
+(defmacro slot-set (struct slot val)
+   `(env-set ',slot ,val ,struct))
+
+;; ------- end of utility/bootstrap code.  now comes the compiler test code ---
+
+(write "----- COMPILER -----\n")
+(write "--- First pass:\n")
+
+(print (compile-expression compile-expression))
+
+(write "----- END COMPILATION -----\n")
+
+
+
+
+
+
+

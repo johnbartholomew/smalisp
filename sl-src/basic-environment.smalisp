@@ -1,0 +1,106 @@
+(let quasiquote (closure (a e)
+   (let do-quasiquote (fn (v)
+      (cond
+         (eq (type v) 'cons)
+            (cond
+               (eq (car v) 'unquote) (eval (car (cdr v)) e)
+               (cons (do-quasiquote (car v)) (do-quasiquote (cdr v))))
+            v)))
+	(do-quasiquote (car a))))
+
+(print `(testing quasiquote: + is ,+ END TEST))
+
+; first defun, just wraps (fn)
+(let defun (macro (name plist expr)
+  `(let ,name (fn ,plist ,expr))))
+
+(defun cadr (l)
+   (car (cdr l)))
+
+(defun cddr (l)
+   (cdr (cdr l)))
+
+(defun caar (l)
+   (car (car l)))
+
+(defun caddr (l)
+   (car (cdr (cdr l))))
+
+(defun cadar (l)
+   (car (cdr (car l))))
+
+(defun cadddr (l)
+   (car (cdr (cdr (cdr l)))))
+
+(defun null (x)
+   (eql x '()))
+
+(defun consp (v)
+   (eql (type v) 'cons))
+
+(defun map-eval (vals env)
+   (cond
+      (null vals) '()
+      (cons (eval (car vals) env)
+         (map-eval (cdr vals) env))))
+
+; TODO: not actually used - get rid of it??
+(defun let-list (names vals env)
+   (cond
+      (null names) '()
+      (do
+         (env-let (car names) (car vals) env)
+         (let-list (cdr names) (cdr vals) env))))
+
+(defun init-param-list (plist args env) (do
+   (let first-name (car plist))
+   (cond
+      (eql first-name '&rest) (env-let (cadr plist) args env)
+      (null first-name) '()
+      (do
+         (env-let first-name (car args) env)
+         (init-param-list (cdr plist) (cdr args) env)))))
+
+(scope
+  (init-param-list '(param-a param-b &rest param-rest) '(arg-a arg-b arg-c arg-d) (get-env))
+  (dump-env)
+)
+
+; second defun, uses init-param-list, so you can define variadic functions
+(let defun (macro (name plist expr)
+  `(let ,name (closure (a e)
+      (init-param-list ',plist (map-eval a e) (get-env)
+      ,expr)))))
+
+; first defmacro, uses init-param-list, so you can define variadic macros
+(let defmacro (macro (name plist code)
+  `(let ,name (closure (a e) (eval (do
+      (init-param-list ',plist a (get-env))
+      ,code) e)))))
+
+; second defmacro uses &rest, so you can write macros with multiple statements
+(defmacro defmacro (name plist &rest code)
+  `(let ,name (closure (a e) (eval (do
+     (init-param-list ',plist a (get-env))
+     . ,code) e))))
+
+; third defun, uses &rest, so you can write functions with multiple statements
+(defmacro defun (name plist &rest code)
+  `(let ,name (closure (a e)
+      (init-param-list ',plist (map-eval a e) (get-env))
+      . ,code)))
+
+(print (defun foo (a)
+   (print a)
+   (print (+ a 5))
+   (print (- a 5))
+   a))
+
+(print (foo 10))
+
+(defun list (&rest items) items)
+
+(print (list 'a 'b 'c 'd 'e 'f 'g 'h))
+
+(exit)
+
