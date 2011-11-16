@@ -1,0 +1,28 @@
+# vim swap files
+*.swp
+
+# autotools output
+autom4te.cache/
+aclocal.m4
+configure
+Makefile.in
+src/config.h.in
+src/config.h.in~
+
+# autotools helper files (added by autoreconf -i)
+depcomp
+missing
+install-sh
+
+# configure output
+Makefile
+config.log
+config.status
+src/.deps/
+src/config.h
+src/stamp-h1
+
+# Make output
+src/.dirstamp
+src/*.o
+smalisp
