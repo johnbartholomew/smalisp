@@ -30,7 +30,7 @@ struct block_info_ts
 	void *p;
 	const char *func;
 	const char *file;
-	unsigned long line;
+	unsigned int line;
 	const char *msg;
 	unsigned int seq;
 	block_info_t *next;
@@ -41,7 +41,7 @@ static block_info_t *last_block_info = 0;
 
 #define ROOT(p) (&(block_tree_roots[(MEMCAST(p, unsigned int) >> 2) % NUM_BLOCK_TREE_ROOTS]))
 
-static block_info_t *_add_new_block_info(void *p, const char *func, const char *file, unsigned long line, const char *msg)
+static block_info_t *_add_new_block_info(void *p, const char *func, const char *file, unsigned int line, const char *msg)
 {
 	block_info_t *info;
 		
@@ -66,7 +66,7 @@ static block_info_t *_add_new_block_info(void *p, const char *func, const char *
 	return info;
 }
 
-static void _inc_block_alloc_count(void *p, const char *func, const char *file, unsigned long line, const char *msg)
+static void _inc_block_alloc_count(void *p, const char *func, const char *file, unsigned int line, const char *msg)
 {
 	rbtn_t *node = 0;
 	block_info_t *info = 0;
@@ -88,7 +88,7 @@ static void _inc_block_alloc_count(void *p, const char *func, const char *file, 
 	manipulating_block_tree = 0;
 }
 
-static void _dec_block_alloc_count(void *p, const char *func, const char *file, unsigned long line, const char *msg)
+static void _dec_block_alloc_count(void *p, const char *func, const char *file, unsigned int line, const char *msg)
 {
 	rbtn_t *node = 0;
 	block_info_t *info = 0;
@@ -159,7 +159,7 @@ static void _finalize(void)
 	manipulating_block_tree = 0;
 }
 
-void *x_malloc(size_t size, const char *func, const char *file, unsigned long line, const char *msg)
+void *x_malloc(size_t size, const char *func, const char *file, unsigned int line, const char *msg)
 {
 	void *p;
 
@@ -176,7 +176,7 @@ void *x_malloc(size_t size, const char *func, const char *file, unsigned long li
 	return p;
 }
 
-void x_free(void *p, const char *func, const char *file, unsigned long line, const char *msg)
+void x_free(void *p, const char *func, const char *file, unsigned int line, const char *msg)
 {
 	if (first_run)
 	{
@@ -187,4 +187,3 @@ void x_free(void *p, const char *func, const char *file, unsigned long line, con
 
 	_dec_block_alloc_count(p, func, file, line, msg);
 }
-

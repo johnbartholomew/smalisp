@@ -2,8 +2,8 @@
 #ifndef MEM_H
 #define MEM_H
 
-void *x_malloc(size_t size, const char *func, const char *file, unsigned long line, const char *msg);
-void x_free(void *p, const char *func, const char *file, unsigned long line, const char *msg);
+void *x_malloc(size_t size, const char *func, const char *file, unsigned int line, const char *msg);
+void x_free(void *p, const char *func, const char *file, unsigned int line, const char *msg);
 
 #if defined(_DEBUG) || defined(DEBUG)
 

@@ -85,7 +85,7 @@ void trace(trace_level_t lvl, const char *fmt, ...)
 			case '%': fputc('%', _sl_trace_file); break;
 			case 'i': fprintf(_sl_trace_file, "%i", va_arg(args, int)); break;
 			case 'd': fprintf(_sl_trace_file, "%d", va_arg(args, int)); break;
-			case 'f': fprintf(_sl_trace_file, "%f", va_arg(args, float)); break;
+			case 'f': fprintf(_sl_trace_file, "%f", va_arg(args, double)); break;
 			case 'l':
 				++c;
 				if (*c == 'f')
@@ -99,7 +99,7 @@ void trace(trace_level_t lvl, const char *fmt, ...)
 			case 'L':
 				++c;
 				if (*c == 'i' || *c == 'd')
-					fprintf(_sl_trace_file, "%Li", va_arg(args, __int64));
+					fprintf(_sl_trace_file, "%"PRId64, va_arg(args, int64_t));
 				else
 				{
 					LOG_ERROR("trace called with invalid type specifier");

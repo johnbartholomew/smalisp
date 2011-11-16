@@ -104,18 +104,34 @@ ref_t slfe_dump_stack(ref_t args, ref_t assoc)
 	return nil();
 }
 
-__int64 rdtsc()
+#if __GNUC__
+static inline uint64_t __attribute__((always_inline)) rdtsc() {
+    unsigned int hi, lo;
+    __asm__ __volatile__(
+        "xorl %%eax, %%eax\n\t"
+        "cpuid\n\t"
+        "rdtsc"
+    : "=a"(lo), "=d"(hi)
+    : /* no inputs */
+    : "rbx", "rcx");
+    return ((unsigned long long)hi << 32) | (unsigned long long)lo;
+}
+#elif __MSC_VER
+uint64_t rdtsc()
 {
 __asm cpuid  // flush the pipe
 __asm rdtsc  // read time stamp register
 }
+#else
+#error "Need GCC or MSVC to use RDTSC"
+#endif
 
 ref_t slfe_profile(ref_t args, ref_t assoc)
 {
 	if (trace_fl)
 	{
 		ref_t result, block_name, block;
-		__int64 start, end;
+		uint64_t start, end;
 
 		block_name = car(args);
 		block = cdr(args);

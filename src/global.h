@@ -9,6 +9,8 @@
 #include <time.h>
 #include <math.h>
 #include <stdarg.h>
+#include <stdint.h>
+#include <inttypes.h>
 #include <assert.h>
 
 #include "mem.h"
