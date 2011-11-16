@@ -28,11 +28,6 @@ possible to implement the bytecode compiler in SmaLisp.
 Unfortunately,   this  distribution   does  not  include   the  bytecode
 evaluation code at all (I hope it hasn't been lost...)
 
-SmaLisp is  an interpreter for a  dialect of  lisp.  The dialect  is not
-described in a formal specification,  as SmaLisp is intended to serve as
-a  base   for  testing  out   language  features,   rather  than   as  a
-commercial-grade programming language.
-
 
 Legal
 -----
