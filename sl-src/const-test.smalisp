@@ -141,9 +141,9 @@
          (init-param-list (cdr plist) (cdr args) env)))))
 
 (define undef (closure (x env)
-	(= x (car x))
-	(env-set-const x '() env)
-	(env-set x '() env)))
+   (= x (car x))
+   (env-set-const x '() env)
+   (env-set x '() env)))
 
 (undef defun) ; undef to prevent a redefinition warning
 ; second defun, uses init-param-list, so you can define variadic functions
@@ -438,35 +438,35 @@
 
 
 (scope
-	(write "Testing sort functions\n\n")
-	(let in-list '("roger" "brian" "mike" "chris" "luke" "kayure" "lisa" "sarah" "nick" "matt" "jenny" "zoe" "matt" "marion" "david" "peter" "spam" "eggs" "milk" "raisins" "water" "glass" "eye" "eyesight" "wine" "pills" "tiberian adventure" "mouse" "keyboard" "trackpad" "phone" "mobile phone" "paper" "pen" "pencil" "trackball" "foghorn" "knife" "aardvark" "animation" "hare" "hair" "iguana" "optician" "quartz" "umpalumpa" "vertical" "venom" "xylophone" "yellow"))
-	(print in-list)
-	(print (sort in-list))
-	(write "\nSort testing done.\n"))
+   (write "Testing sort functions\n\n")
+   (let in-list '("roger" "brian" "mike" "chris" "luke" "kayure" "lisa" "sarah" "nick" "matt" "jenny" "zoe" "matt" "marion" "david" "peter" "spam" "eggs" "milk" "raisins" "water" "glass" "eye" "eyesight" "wine" "pills" "tiberian adventure" "mouse" "keyboard" "trackpad" "phone" "mobile phone" "paper" "pen" "pencil" "trackball" "foghorn" "knife" "aardvark" "animation" "hare" "hair" "iguana" "optician" "quartz" "umpalumpa" "vertical" "venom" "xylophone" "yellow"))
+   (print in-list)
+   (print (sort in-list))
+   (write "\nSort testing done.\n"))
 
 (write "Testing const-lambda\n\n")
 
 (defun const-expand (expr env)
-	(cond
-		; it's a variable (or constant)
-		(symbol? expr)
-			(if (env-get-const expr env)
-				(eval expr env)
-				expr)
+   (cond
+      ; it's a variable (or constant)
+      (symbol? expr)
+         (if (env-get-const expr env)
+            (eval expr env)
+            expr)
 
-		; it's an application
-		(pair? expr)
-			; for now, we'll only const-expand one level to test
-			; so just try to const-expand the car
-			(cons (const-expand (car expr) env) (cdr expr))
+      ; it's an application
+      (pair? expr)
+         ; for now, we'll only const-expand one level to test
+         ; so just try to const-expand the car
+         (cons (const-expand (car expr) env) (cdr expr))
 
-		; it's something else; can't be const-expanded
-		expr))
+      ; it's something else; can't be const-expanded
+      expr))
 
 (defmacro test (expr)
-	(write "Testing: ")
-	(print expr)
-	expr)
+   (write "Testing: ")
+   (print expr)
+   expr)
 
 (print (test (const-expand 'sort (get-env))))
 (print (test (const-expand '(print 'hello-world) (get-env))))

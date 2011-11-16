@@ -10,7 +10,7 @@
                (eq (car v) 'unquote) (eval (car (cdr v)) e)
                (cons (do-quasiquote (car v)) (do-quasiquote (cdr v))))
             v)))
-	(do-quasiquote (car a))))
+   (do-quasiquote (car a))))
 
 ;; some synonyms (may or may not use - we'll see)
 (let = set)

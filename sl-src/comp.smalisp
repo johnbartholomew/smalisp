@@ -422,28 +422,28 @@
 ;; ------- end of utility/bootstrap code.  now comes the compiler -----------------------
 
 (defstruct var-info-t
-	name
-	known-type
-	is-monomorphic
-	known-value
-	is-constant)
+   name
+   known-type
+   is-monomorphic
+   known-value
+   is-constant)
 
 (defun compile-expr (expr comp-env)
-	(cond
-		(eq (type expr) 'symbol)
-			(compile-symbol expr comp-env)
-		(eq (type expr) 'cons)
-			(compile-cons expr comp-env)
-		(compile-self-evaluating expr comp-env)))
+   (cond
+      (eq (type expr) 'symbol)
+         (compile-symbol expr comp-env)
+      (eq (type expr) 'cons)
+         (compile-cons expr comp-env)
+      (compile-self-evaluating expr comp-env)))
 
 (defun compile-self-evaluating (expr comp-env)
-	)
+   )
 
 (defun compile-symbol (expr comp-env)
-	)
+   )
 
 (defun compile-cons (expr comp-env)
-	)
+   )
 
 
 
