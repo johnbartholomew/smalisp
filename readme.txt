@@ -66,3 +66,4 @@ get Pouya's originals, and diff them with my files.)
 -- John Bartholomew
  [ jlbig21@hotmail.com ]
 
+# vim: set ts=8 sts=3 sw=3 et ai tw=72 wm=6 wrap:
