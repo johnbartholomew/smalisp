@@ -1,3 +1,4 @@
+/* vim: set ts=4 sts=4 sw=4 noet ai: */
 /* str.h, the interface to the high-level string functions
 
   Copyright (C) 2002 Pouya Larjani

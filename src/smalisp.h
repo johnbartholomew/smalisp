@@ -1,3 +1,4 @@
+/* vim: set ts=4 sts=4 sw=4 noet ai: */
 #ifndef SMALISP_H
 #define SMALISP_H
 
